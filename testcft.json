@@ -1,0 +1,390 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation template.",
+  "Parameters": {
+    "VPCCIDR": {
+      "Description": "CIDR IP range for VPC",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "10.0.0.0/8",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid CIDR range of the form x.x.x.x/x."
+    },
+    "RegionAZ1": {
+      "Description": "Name of the Availability zone in the AWS region",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern": "[-_ a-zA-Z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
+    },
+    "RegionAZ2": {
+      "Description": "Name of the Availability zone in the AWS region",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern": "[-_ a-zA-Z0-9]*",
+      "ConstraintDescription": "can contain only alphanumeric characters, spaces, dashes and underscores."
+    },
+    "AZ1CIDR": {
+      "Description": "CIDR IP range for DMS Subnet in RegionAZ1",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "10.1.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid CIDR range of the form x.x.x.x/x."
+    },
+    "AZ2CIDR": {
+      "Description": "CIDR IP range for DMS Subnet in RegionAZ2",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "10.2.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid CIDR range of the form x.x.x.x/x."
+    },
+    "InstanceType": {
+      "Description": "WebServer EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t3.large"
+      ],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    }
+  },
+  "Mappings": {
+    "AML": {
+      "eu-central-1": {
+        "AMI": "ami-00f22f6155d6d92c5"
+      }
+    }
+  },
+  "Resources": {
+    "TESTVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VPCCIDR"
+        },
+        "InstanceTenancy": "default",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "false",
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    },
+    "subnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "AZ1CIDR"
+        },
+        "AvailabilityZone": {
+          "Ref": "RegionAZ1"
+        },
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "procut_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    },
+    "subnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "AZ2CIDR"
+        },
+        "AvailabilityZone": {
+          "Ref": "RegionAZ2"
+        },
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    },
+    "TESTSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": "TESTSG",
+        "GroupDescription": "TESTSG",
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "10.0.0.0/8"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "All",
+            "FromPort": 0,
+            "ToPort": 65535,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "RootTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BJI_PRD_DMZ_RTB"
+          }
+        ]
+      }
+    },
+    "RootTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BJI_PRD_PRV_RTB"
+          }
+        ]
+      }
+    },
+    "AZ1SRT1A": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RootTable1"
+        },
+        "SubnetId": {
+          "Ref": "subnet1"
+        }
+      }
+    },
+    "AZ2SRT1A": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RootTable2"
+        },
+        "SubnetId": {
+          "Ref": "subnet2"
+        }
+      }
+    },
+    "NACL1": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    },
+    "NACL2": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    },
+    "AZ1SNAA": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "NACL1"
+        },
+        "SubnetId": {
+          "Ref": "subnet1"
+        }
+      }
+    },
+    "AZ2SNAA": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "NACL2"
+        },
+        "SubnetId": {
+          "Ref": "subnet2"
+        }
+      }
+    },
+    "LoadBalancerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP access on port 443",
+        "VpcId": {
+          "Ref": "TESTVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "443",
+            "ToPort": "443",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "443",
+            "ToPort": "443",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Subnets": {
+          "Ref": "subnet2"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "LoadBalancerSecurityGroup"
+          }
+        ]
+      }
+    },
+    "ALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ALBTargetGroup"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": "443",
+        "Protocol": "HTTPS"
+      }
+    },
+    "ALBTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 25,
+        "HealthyThresholdCount": 3,
+        "HealthCheckPath": "/health",
+        "Port": 443,
+        "Protocol": "HTTPS",
+        "UnhealthyThresholdCount": 5,
+        "VpcId": {
+          "Ref": "TESTVPC"
+        }
+      }
+    },
+    "TESTEC2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AML",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMI"
+          ]
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeType": "gp2",
+              "VolumeSize": "40"
+            }
+          },
+          {
+            "DeviceName": "/dev/sdb",
+            "Ebs": {
+              "VolumeType": "gp2",
+              "VolumeSize": "30"
+            }
+          }
+        ],
+        "InstanceType": "t3.large",
+        "NetworkInterfaces": [
+          {
+            "GroupSet": [
+              {
+                "Ref": "TESTSG"
+              },
+              {
+                "Ref": "LoadBalancerSecurityGroup"
+              }
+            ],
+            "AssociatePublicIpAddress": "false",
+            "DeviceIndex": "0",
+            "DeleteOnTermination": "true",
+            "SubnetId": {
+              "Ref": "subnet1"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "product_id",
+            "Value": "test_product"
+          }
+        ]
+      }
+    }
+  }
+}
